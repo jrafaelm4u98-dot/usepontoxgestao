@@ -8,7 +8,7 @@ import base64
 import subprocess
 from backend.main import app as fastapi_app
 
-APP_VERSION = "1.0"
+APP_VERSION = "1.1"
 REPO = "jrafaelm4u98-dot/usepontoxgestao"
 
 # ── Estabilidade do WebView2 (Corrige Erros de Acessibilidade/Recursão) ───────
