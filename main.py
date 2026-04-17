@@ -8,6 +8,9 @@ import base64
 import subprocess
 from backend.main import app as fastapi_app
 
+APP_VERSION = "1.0"
+REPO = "jrafaelm4u98-dot/usepontoxgestao"
+
 # ── Estabilidade do WebView2 (Corrige Erros de Acessibilidade/Recursão) ───────
 os.environ['EDGE_WEBVIEW2_ACCESSIBILITY_DISABLED'] = '1'
 sys.setrecursionlimit(10000) # Aumenta margem de manobra
@@ -173,24 +176,81 @@ def _maximize(window):
     except:
         pass
 
-def start_desktop():
+def _check_update_and_download(window):
+    import urllib.request
+    import json
+    import ssl
+    import tempfile
+    import shutil
+
+    api_url = f"https://api.github.com/repos/{REPO}/releases/latest"
+    try:
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'UsePontox'})
+        with urllib.request.urlopen(req, timeout=5) as res:
+            data = json.loads(res.read().decode())
+            latest_version = data.get("tag_name", "").replace("v", "")
+            
+            if latest_version and latest_version != APP_VERSION:
+                assets = data.get("assets", [])
+                update_url = next((a.get("browser_download_url") for a in assets if a.get("name", "").endswith(".exe")), None)
+                
+                if update_url:
+                    window.evaluate_js("document.querySelector('p').innerText = 'Baixando atualização invisível (150mb). Por favor, não feche o sistema...';")
+                    
+                    update_exe = os.path.join(tempfile.gettempdir(), "UsePontoX_Updater.exe")
+                    ctx = ssl.create_default_context()
+                    ctx.check_hostname = False
+                    ctx.verify_mode = ssl.CERT_NONE
+                    
+                    req_dl = urllib.request.Request(update_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req_dl, context=ctx, timeout=600) as response, open(update_exe, 'wb') as out_file:
+                        shutil.copyfileobj(response, out_file)
+                        
+                    window.evaluate_js("document.querySelector('p').innerText = 'Instalando atualização... O sistema será reiniciado.';")
+                    subprocess.Popen([
+                        update_exe, 
+                        "/VERYSILENT", 
+                        "/SUPPRESSMSGBOXES", 
+                        "/FORCECLOSEAPPLICATIONS"
+                    ], creationflags=0x08000000)
+                    
+                    time.sleep(1)
+                    os._exit(0)
+                    return True
+    except Exception as e:
+        print("Update skipped:", e)
+    return False
+
+def background_tasks(window):
     import urllib.request
     
-    # Instale Chromium em background na 1ª vez (sem janela CMD)
+    # 1. Verifica atualizacoes
+    updated = _check_update_and_download(window)
+    if updated:
+        return
+        
+    window.evaluate_js("document.querySelector('p').innerText = 'Iniciando o sistema local...';")
+    
+    # 2. Instale Chromium em background na 1a vez
     t_chrome = threading.Thread(target=_instalar_chromium_silencioso, daemon=True)
     t_chrome.start()
 
-    # Inicia o backend em thread separado
+    # 3. Inicia o backend em thread separado
     t = threading.Thread(target=run_fastapi, daemon=True)
     t.start()
 
-    # Pausa mais generosa (4s) para garantir que o FastAPI subiu completamente
+    # 4. Pausa mais generosa (4s) para garantir que o FastAPI subiu completamente
     time.sleep(4.0)
 
+    # 5. Entra no sistema de fato
+    window.load_url('http://127.0.0.1:8000/')
+    _maximize(window)
+
+def start_desktop():
     api = Api()
     window = webview.create_window(
         'USEPONTOX',
-        url='http://127.0.0.1:8000/',
+        html=_LOADING_HTML,
         js_api=api,
         width=1280,
         height=800,
@@ -199,9 +259,8 @@ def start_desktop():
     )
     api.set_window(window)
 
-    # Inicia o loop do webview (bloqueia aqui até fechar a janela)
-    # Passamos window dentro de uma tupla para o callback
-    webview.start(_maximize, (window,), debug=False)
+    webview.start(background_tasks, window, debug=False)
 
 if __name__ == "__main__":
     start_desktop()
+
