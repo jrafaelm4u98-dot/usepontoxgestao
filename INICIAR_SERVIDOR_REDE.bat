@@ -67,5 +67,11 @@ exit /b 1
 :runserver
 echo Iniciando servidor com: %PYEXE%
 echo.
+
+echo ==============================================
+echo   Buscando Atualizacoes na Nuvem
+echo ==============================================
+%PYEXE% updater.py
+
 %PYEXE% servidor_rede.py
 pause

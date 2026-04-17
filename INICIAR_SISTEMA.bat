@@ -19,5 +19,11 @@ if "%PYEXE%"=="" (
     exit
 )
 
+echo.
+echo ==============================================
+echo   Buscando Atualizacoes na Nuvem
+echo ==============================================
+%PYEXE% updater.py
+
 %PYEXE% main.py
 pause
